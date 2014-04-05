@@ -833,12 +833,20 @@ alias(SpeechScript::Startup)
         echo "Speech Script: Messages will no longer be displayed in notification bubbles when they are spoken."
     }
     popup.addItem("SpeechScript_Main", "Configure speech command...") %SpeechScript_Settings{"GUI"}{"SpeechScript_SpeechCommand"}->$show
+
+    # Making sure the main 'Scripts' menu command exists
+    if ($(!($popup.exists("Scripts"))))
+    {
+        popup.create "Scripts"
+
+        # Tying main script popup to KVIrc menu (appears after 'Scripting')
+        setmenu -i=2 "Scripts" "Scripts"
+    }
+
+    # Adding Speech Script to Scripts popup
     popup.delitem -q "Scripts" "SpeechScript_Main"
     popup.addExtPopup "Scripts" "SpeechScript_Main" "Speech Script" "" "SpeechScript_Main"
-    
-    # Tying main script popup to KVIrc menu (appears after 'Scripting')
-    setmenu -i=2 "Scripts" "Scripts"
-    
+
     # Integrating into channel popup
     # Creating script popup
     if ($popup.exists("SpeechScript_Channel")) popup.destroy "SpeechScript_Channel"
