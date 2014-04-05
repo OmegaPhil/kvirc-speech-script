@@ -1,0 +1,1162 @@
+# Speech Script
+# =============
+
+# Version 1.6 April 2014
+
+/*
+Copyright (C) 2010-2014 OmegaPhil (OmegaPhil+KVIrc@gmail.com)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.                See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.                If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+# EVENTS BLOCK
+# Initialising components
+event(OnKVIrcStartup,SpeechScript)
+{
+    # Running startup
+    SpeechScript::Startup
+}
+
+# Intercepting actions
+event(OnAction,SpeechScript)
+{
+    # $0 = source nick
+    # $1 = source username
+    # $2 = source host
+    # $3 = message target
+    # $4 = action message text
+    
+    # Exiting if the script is off
+    if (%SpeechScript_Settings{"Status"} == "off") return
+    
+    # Exiting if the action actually has no message associated with it (i.e. the user just sent '/me')
+    if ($4 == "") return
+    
+    # Exiting if the action is not targeted to a channel
+    if ($channel == 0) return
+    
+    # Passing event to SpeechScript::MessageProcessor
+    SpeechScript::MessageProcessor "action" $0 $target $4
+}
+
+# Intercepting channel message events
+event(OnChannelMessage,SpeechScript)
+{
+    # $0 = source nick
+    # $1 = source username
+    # $2 = source host
+    # $3 = message
+    # $4 = [target mode prefixes]
+    
+    # Exiting if the script is off
+    if (%SpeechScript_Settings{"Status"} == "off") return
+    
+    # Making sure the message is not nothing (someone managed to do this on #Boxtorrents, its more hardcore than just a control code character)
+    if ($3 == "") return
+    
+    # Debug code
+    #echo "Channel message detected: "$3
+    
+    # Passing event to SpeechScript::MessageProcessor
+    SpeechScript::MessageProcessor "channel" $0 $target $3
+}
+
+
+# ALIASES BLOCK
+# SpeechScript alias. Usage: Usage: SpeechScript <command>. <nothing>: Script status. h/help: This usage information. on: Turn script on. off: Turn script off. startup: Load script up. removeignoredstatus <status>: Removes the desired status from the list of statuses that channel messages are ignored during - Status Script functionality. addignoredstatus <status>: Adds the desired status to the list of statuses that channel messages are ignored during - Status Script functionality. addignoredstatusprompt <status>: Intended for internal script use to add an ignored status via dynamic GUI. clearqueuedmessages: Removes all messages from the queue waiting to be spoken..
+alias(SpeechScript)
+{
+    # Variable allocation
+    %usageInstructions = "Usage: SpeechScript <command>. <nothing>: Script status. h/help: This usage information. on: Turn script on. off: Turn script off. startup: Load script up. removeignoredstatus <status>: Removes the desired status from the list of statuses that channel messages are ignored during - Status Script functionality. addignoredstatus <status>: Adds the desired status to the list of statuses that channel messages are ignored during - Status Script functionality. addignoredstatusprompt <status>: Intended for internal script use to add an ignored status via dynamic GUI. clearqueuedmessages: Removes all messages from the queue waiting to be spoken."
+
+    # Intercepting status request (nothing passed to the alias)
+    if ($0 == "")
+    {
+        echo "Speech Script is currently %SpeechScript_Settings{"Status"}."
+        return
+    }
+    
+    # Intercepting help requests
+    if ($0 == "h" || $0 == "help")
+    {
+        echo %usageInstructions
+        return
+    }
+    
+    # Intercepting on request
+    if ($0 == "on")
+    {
+        # Making sure script is off
+        if (%SpeechScript_Settings{"Status"} != "off")
+        {
+            # Script is already on - informing user and exiting
+            warning "Speech Script is already on."
+            return
+        }
+        
+        # Turning script on and saving
+        %SpeechScript_Settings{"Status"} = "on"
+        SpeechScript::Save
+        
+        # Informing user script has been turned on
+        echo "Speech Script has been turned on."
+        return
+    }
+    
+    # Intercepting off request
+    if ($0 == "off")
+    {
+        # Making sure script is on
+        if (%SpeechScript_Settings{"Status"} != "on")
+        {
+            # Script is already off - informing user and exiting
+            warning "Speech Script is already off."
+            return
+        }
+        
+        # Turning script off and saving
+        %SpeechScript_Settings{"Status"} = "off"
+        SpeechScript::Save
+        
+        # Informing user script has been turned off
+        echo "Speech Script has been turned off."
+        return
+    }
+    
+    # Intercepting startup request
+    if ($0 == "startup")
+    {
+        # Running startup
+        SpeechScript::startup
+        return
+    }
+    
+    # Intercepting removeignoredstatus request
+    if ($0 == "removeignoredstatus")
+    {
+        # Making sure a status has been passed
+        if ($1 == "")
+        {
+            # It hasn't - erroring
+            error "SpeechScript removeignoredstatus has been called without a status to remove."
+        }
+        
+        # Making sure the status is actually ignored
+        if (%SpeechScript_Settings{"IgnoreDuringCertainStatuses"}{$1} == "")
+        {
+            # It isn't - warning user and exiting
+            warning "SpeechScript removeignoredstatus has been passed the status '$1' to remove, however channel messages during this status are not ignored."
+            return
+        }
+        
+        # Updating hash and saving
+        %SpeechScript_Settings{"IgnoreDuringCertainStatuses"}{$1} = ""
+        SpeechScript::Save
+        
+        # Informative message
+        echo "Speech Script: Channel messages will no longer be ignored during the $1 status."
+        return
+    }
+    
+    # Intercepting addignoredstatus request
+    if ($0 == "addignoredstatus")
+    {
+        # Making sure a status has been passed
+        if ($2 == "")
+        {
+            # It hasn't - erroring
+            error "SpeechScript addignoredstatus has been called without a status to add."
+        }
+    
+        # Adding requested status and saving
+        %SpeechScript_Settings{"IgnoreDuringCertainStatuses"}{$1} = $1
+        SpeechScript::Save
+        
+        # Informative message
+        echo "Speech Script: Channel messages will now be ignored during the $1 status."
+        return
+    }
+    
+    # Intercepting addignoredstatusprompt request
+    if ($0 == "addignoredstatusprompt")
+    {
+        # Obtaining statusToIgnore
+        dialog.textinput -i=$icon("Information") ("Add Status To Ignore Channel Messages During", "Status to ignore channel messages during:", "Add", "escape=Cancel")
+        {
+            # Debug code
+            #echo "Dialog return value: "$0
+
+            # Exiting if user cancelled
+            if ($0 == 1) return
+            
+            # Setting statusToIgnore
+            %statusToIgnore = $1
+
+            # Making sure statusToIgnore was given
+            if (%statusToIgnore == "")
+            {
+                # It wasn't - warning user and exiting
+                warning "Please specify a status to ignore channel messages during."
+                return
+            }
+        
+            # Adding status and saving
+            %SpeechScript_Settings{"IgnoreDuringCertainStatuses"}{$1} = $1
+            SpeechScript::Save
+
+            # Informative message
+            echo "Speech Script: Channel messages will now be ignored during the %statusToIgnore status."
+        }
+        return
+    }
+    
+    # Intercepting clearqueuedmessages request
+    if ($0 == "clearqueuedmessages")
+    {
+        # Clearing all queued messages
+        %SpeechScript_Queue = ""
+        
+        # Reinitialising speech queue data
+        %SpeechScript_Queue{"NextAvailableID"} = 1
+        %SpeechScript_Queue{"CurrentID"} = 0
+
+        # Informative message
+        echo "Speech Script: Channel messages have been cleared."
+        return
+    }
+    
+    # Informing user of an unrecognised command
+    warning "Command unrecognised - use h/help for usage instructions."
+}
+
+# SpeechScript::GetCurrentVolumeString alias
+# Returns 'Mute'/'Quiet'/'Normal'/'Loud'/'MAXIMUM'/'Unknown'
+alias(SpeechScript::GetCurrentVolumeString)
+{
+    # Obtaining currentVolume
+    %currentVolume = %SpeechScript_Settings{"Volume"}
+
+    # Debug code
+    #echo "\%currentVolume: "%currentVolume
+
+    # Making sure currentVolume is not unset - as this must cope with 0 as a value, strict comparsion is needed
+    if ($str.equal(%currentVolume, ""))
+    {
+        # It is - warning user and exiting
+        error "GetCurrentVolumeString has been called, but the saved volume is unset."
+    }
+    
+    # Dealing with the various volumes
+    switch (%currentVolume)
+    {
+        case (0): return "Mute"
+        case (30): return "Quiet"
+        case (100): return "Normal"
+        case (200): return "Loud"
+        case (350): return "MAXIMUM"
+        default:
+        {
+            # Non-standard volume - warning user and returning Unknown
+            warning "The current volume (%currentVolume) is not a standard volume."
+            return "Unknown"
+        }
+    }
+}
+
+# SpeechScript::MessageProcessor alias
+# Usage: SpeechScript::MessageProcessor <message type, 'channel'/'action'> <nick> <channel> <message>
+alias(SpeechScript::MessageProcessor)
+{
+    # Making sure message type has been passed
+    if ($0 == "")
+    {
+        # Message type hasn't been passed - erroring
+        error "SpeechScript::MessageProcessor has been called without passing a message type."
+    }
+    
+    # Setting messageType
+    %messageType = $0
+    
+    # Making sure a valid message type has been passed
+    switch (%messageType)
+    {
+        case("channel"): break
+        case("action"): break
+        default:
+        {
+            # A valid message type hasn't been passed - erroring
+            error "SpeechScript::MessageProcessor has been called with an invalid message type - '%messageType'."
+        }
+    }
+    
+    # Making sure nick has been passed
+    if ($1 == "")
+    {
+        # Nick hasn't been passed - erroring
+        error "SpeechScript::MessageProcessor has been called without passing a nick. Parameters: '$0-'."
+    }
+    
+    # Setting nick
+    %nick = $1
+    
+    # Making sure channel has been passed
+    if ($2 == "")
+    {
+        # Channel hasn't been passed - erroring
+        error "SpeechScript::MessageProcessor has been called without passing a channel. Parameters: '$0-'."
+    }
+    
+    # Setting channel
+    %channel = $2
+    
+    # Making sure a message has been passed
+    if ($3 == "")
+    {
+        # A message hasn't been passed - erroring
+        error "SpeechScript::MessageProcessor has been called without passing a message. Parameters: '$0-'."
+    }
+    
+    # Setting messageToProcess
+    %messageToProcess = $3
+
+    # Exiting if KVIrc is the active application and the relevant channel window is active, if this setting is enabled
+    if (%SpeechScript_Settings{"IgnoreWhenActive"} != "" && $isMainWindowActive && $active == $channel) return
+
+    # Making sure the channel is being monitored - if not, exiting
+    if (%SpeechScript_ChannelSettings{%channel} == "") return
+    
+    # Channel is being monitored - checking if messages are to be ignored during particular statuses
+    if (%SpeechScript_ChannelSettings{%channel".IgnoreDuringCertainStatuses"} != "")
+    {
+        # They are - exiting if a relevant status is in effect
+        if (%StatusScript_State != "" && %StatusScript_State{"Full status"} != "" && %SpeechScript_Settings{"IgnoreDuringCertainStatuses"}{%StatusScript_State{"Full status"}} != "") return
+    }
+    
+    # Exiting if the nick is on the channel's ignore list
+    if (%SpeechScript_ChannelSettings{%channel".Ignore."%nick} != "") return
+    
+    # Checking if this channel is set to ignore everyone below hop or not
+    if (%SpeechScript_ChannelSettings{%channel".IgnoreEveryoneBelowHop"} != "")
+    {
+        # The channel is set to ignore below hops - obtaining channelWindowID
+        %channelWindowID = $channel(%channel)
+        
+        # Exiting if the nick is <hop
+        if ($chan.ishalfop(%nick, %channelWindowID) == 0 && $chan.isop(%nick, %channelWindowID) == 0 && $chan.isadmin(%nick, %channelWindowID) == 0 && $chan.isowner(%nick, %channelWindowID) == 0) return
+    }
+    
+    # Checking if the nick is the main ZNC user
+    if (%nick == "***")
+    {
+        # It is - checking if buffer playback is beginning
+        switch(%messageToProcess)
+        {
+            case("Buffer Playback...")
+            {
+                # It is - adding a ZNCPlayback record for the channel (no buffer playback messages should be spoken, unfortunately this will also drop some valid messages - there is no way to tell the difference)
+                %SpeechScript_ChannelSettings{%channel".ZNCPlayback"} = %channel".ZNCPlayback"
+                SpeechScript::Save
+            }
+        
+            # Checking if buffer playback is ending
+            case("Playback Complete.")
+            {
+                # It is - removing the ZNCPlayback record for the channel and exiting
+                %SpeechScript_ChannelSettings{%channel".ZNCPlayback"} = ""
+                SpeechScript::Save
+            }
+        }
+        
+        # Reaching here means the message should not be spoken - exiting
+        return
+    }
+    
+    # Exiting if the nick is another ZNC user
+    if ($str.mid(%nick,0,1) == "*") return
+    
+    # Exiting if the message is likely to be part of the ZNC buffer being played back
+    if (%SpeechScript_ChannelSettings{%channel".ZNCPlayback"} != "") return
+
+    # Making sure triggers are not spoken
+    if ($str.mid(%messageToProcess,0,1) == "!") return
+
+    # Debug code
+    #echo %messageToProcess
+
+    # Exclusion block passed - the message can be spoken!
+    # Processing message to remove links
+    %messageToProcess =~ s/(www\\..*|https?:\/\/.*|ftp\\..*|ftps?:\/\/.*|irc\\..*|ircs?:\/\/.*)(\\s|$)/(link removed)/gim
+
+    # Debug code
+    #echo %messageToProcess
+
+    # Sanitising message
+    # Removing speechmarks and quote marks
+    %messageToProcess =~ s/[\"']//gim
+
+    # Escaping KVIrc script (users are instructed to strongly-quote the message in the speech command, so no further sanitising is done)
+    %messageToProcess = $escape(%messageToProcess)
+    
+    # Processing nick - removing '[' and ']'
+    %nick =~ s/[\\[\\]]//gim
+    
+    # Replacing '|' with '-'
+    %nick =~ s/\\|/-/gim
+    
+    # Building textToSpeak - checking if the last message message was received >= 2 minutes ago, or the network or channel changed
+    # Unintuitive 'On' addition to make sure that 'On' is only added when a network and/or channel are specified
+    if (($unixtime >= $(%SpeechScript_Settings{"LastMessageFrom"}{"Time"} + 120) || %SpeechScript_Settings{"LastMessageFrom"}{"Network"} != $context.networkName || %SpeechScript_Settings{"LastMessageFrom"}{"Channel"} != %channel))
+    {
+        # This is the case - network and/or channel are to be included with message according to settings
+        if (%SpeechScript_ChannelSettings{%channel".IncludeNetworkWithMessage"} != "") %textToSpeak = %textToSpeak$context.networkName", "
+        if (%SpeechScript_ChannelSettings{%channel".IncludeChannelWithMessage"} != "") %textToSpeak = %textToSpeak$str.mid(%channel,1)", "
+        if (%textToSpeak != "") %textToSpeak = "On "%textToSpeak
+    }
+    
+    # If the message is normal and the same nick spoke the last message on the same channel within the last 10 seconds, not announcing the message came from them. Report on actions as normal
+    if (%messageType == "channel")
+    {
+        if ($unixtime <= $(%SpeechScript_Settings{"LastMessageFrom"}{"Time"} + 10) && %SpeechScript_Settings{"LastMessageFrom"}{"Network"} == $context.networkName && %SpeechScript_Settings{"LastMessageFrom"}{"Channel"} == %channel && %SpeechScript_Settings{"LastMessageFrom"}{"Nick"} == %nick)
+        {
+            %textToSpeak = %messageToProcess
+        }
+        else
+        {
+            %textToSpeak = "%textToSpeak %nick said %messageToProcess"
+        }
+    }
+    if (%messageType == "action") %textToSpeak = "%textToSpeak %nick %messageToProcess"
+    
+    # Queueing message up
+    %SpeechScript_Queue{%SpeechScript_Queue{"NextAvailableID"}}{"TextToSpeak"} = %textToSpeak
+    %SpeechScript_Queue{%SpeechScript_Queue{"NextAvailableID"}}{"Network"} = $context.networkName
+    %SpeechScript_Queue{%SpeechScript_Queue{"NextAvailableID"}}{"Channel"} = %channel
+    %SpeechScript_Queue{%SpeechScript_Queue{"NextAvailableID"}}{"Nick"} = %nick
+    %SpeechScript_Queue{%SpeechScript_Queue{"NextAvailableID"}}{"Message"} = %messageToProcess
+
+    # Debug code
+    #echo "Message data: "%SpeechScript_Queue{%SpeechScript_Queue{"NextAvailableID"}}
+    #echo "Network: "%SpeechScript_Queue{%SpeechScript_Queue{"NextAvailableID"}}{"Network"}
+    
+    %SpeechScript_Queue{"NextAvailableID"}++ 
+    
+    # Debug code
+    #echo "Network: "%SpeechScript_Queue{%SpeechScript_Queue{"NextAvailableID"}}{"Network"}
+    #echo "Test: "%SpeechScript_Queue{%SpeechScript_Queue{"NextAvailableID"}--}
+    
+    # Triggering message playback if something isn't already being spoken
+    if (%SpeechScript_Queue{"Speaking"} == "") SpeechScript::SpeakNextMessage
+    
+    # Updating SpeechScript{"LastMessageFrom"}
+    %SpeechScript_Settings{"LastMessageFrom"}{"Network"} = $context.networkName
+    %SpeechScript_Settings{"LastMessageFrom"}{"Channel"} = %channel
+    %SpeechScript_Settings{"LastMessageFrom"}{"Nick"} = %nick
+    %SpeechScript_Settings{"LastMessageFrom"}{"Time"} = $unixtime
+}
+
+# SpeechScript::Save alias
+alias(SpeechScript::Save)
+{
+    # Opening config file
+    %configFileID = $config.open($file.localdir("/scripts/speech_script_settings"))
+    
+    # Saving settings
+    config.clearsection %configFileID "KVIrc"
+    config.write %configFileID "SpeechScript_Settings" $serialize(%SpeechScript_Settings)
+    
+    # Saving channel settings
+    config.clearsection %configFileID "ChannelSettings"
+    config.setsection %configFileID "ChannelSettings"
+    config.write %configFileID "SpeechScript_ChannelSettings" $serialize(%SpeechScript_ChannelSettings)
+
+    # Committing settings
+    config.close %configFileID
+}
+
+# SpeechScript::SetVolume alias
+# Usage: SpeechScript::SetVolume <Desired volume string, 'Mute'/'Quiet'/'Normal'/'Loud'/'MAXIMUM'>
+alias(SpeechScript::SetVolume)
+{
+    # Making sure desiredVolume was given
+    if ($0 == "")
+    {
+        # It wasn't - erroring
+        error "SetVolume was called without passing a desired volume to set."
+    }
+    
+    # Setting desiredVolume
+    %desiredVolume = $0
+    
+    # Obtaining currentVolume
+    %currentVolume = $SpeechScript::GetCurrentVolumeString
+    
+    # Making sure currentVolume exists
+    if (%currentVolume == "")
+    {
+        # It doesn't - erroring
+        error "The current volume has not been saved."
+    }
+
+    # Dealing with the various desired volumes
+    switch(%desiredVolume)
+    {
+        case("Mute")
+        {
+            %SpeechScript_Settings{"Volume"} = 0
+            break
+        }
+        case("Quiet")
+        {
+            %SpeechScript_Settings{"Volume"} = 30
+            break
+        }
+        case("Normal")
+        {
+            %SpeechScript_Settings{"Volume"} = 100
+            break
+        }
+        case("Loud")
+        {
+            %SpeechScript_Settings{"Volume"} = 200
+            break
+        }
+        case("MAXIMUM")
+        {
+            %SpeechScript_Settings{"Volume"} = 350
+            break
+        }
+        default:
+        {
+            # Non-standard desired volume - erroring
+            error "The desired volume '%desiredVolume' is not a standard volume - unable to set."
+        }
+    }
+    
+    # Saving settings
+    SpeechScript::Save
+    
+    # Informative message
+    echo "Speech Script volume has been changed from %currentVolume to %desiredVolume."
+}
+
+# SpeechScript::SpeakNextMessage alias
+# Usage: SpeechScript::SpeakNextMessage <message>
+alias(SpeechScript::SpeakNextMessage)
+{
+    # Checking if there are no messages to speak
+    if (%SpeechScript_Queue{"NextAvailableID"} == (%SpeechScript_Queue{"CurrentID"} + 1))
+    {
+        # There aren't - resetting 'Speaking' and exiting
+        %SpeechScript_Queue{"Speaking"} = ""
+        return
+    }
+    
+    # Debug code
+    #echo "SpeechScript::SpeakNextMessage hit"
+    
+    # Recording the fact that speech is in progress and updating current ID (remember that NextAvailableID has already been incremented in SpeechScript::MessageProcessor)
+    %SpeechScript_Queue{"Speaking"} = "Speaking"
+    %SpeechScript_Queue{"CurrentID"}++
+    
+    # Obtaining message data
+    %message = %SpeechScript_Queue{%SpeechScript_Queue{"CurrentID"}}{"TextToSpeak"}
+    %network = %SpeechScript_Queue{%SpeechScript_Queue{"CurrentID"}}{"Network"}
+    %channel = %SpeechScript_Queue{%SpeechScript_Queue{"CurrentID"}}{"Channel"}
+    %nick = %SpeechScript_Queue{%SpeechScript_Queue{"CurrentID"}}{"Nick"}
+    %rawmessage = %SpeechScript_Queue{%SpeechScript_Queue{"CurrentID"}}{"Message"}
+    
+    # Clearing message data
+    %SpeechScript_Queue{%SpeechScript_Queue{"CurrentID"}} = ""
+    
+    # Erroring if the message doesn't have content. No further cleanup is needed as the message doesn't exist anyway
+    if (%message == "") error "SpeechScript::SpeakNextMessage has been given a message to speak that has no content. CurrentID: %SpeechScript_Queue{"CurrentID"}"
+
+    # Making sure a speech command has been defined
+    if (%SpeechScript_Settings{"SpeechCommand"} == "") error "SpeechScript::SpeakNextMessage has been given a message to speak, but no speech command has been configured!"
+
+    # Substituting message into command
+    %command = %SpeechScript_Settings{"SpeechCommand"}
+    %command =~ s/\%m/%message/g
+    %command =~ s/\%v/%SpeechScript_Settings{"Volume"}/g
+
+    # Speaking the message
+    exec -t (%command)
+    {
+        # Handling exec events
+        # Intercepting 'terminated' event
+        if ($0 == "terminated")
+        {
+            # Removing message from queue and running SpeakNextMessage again
+            %SpeechScript_Queue{%SpeechScript_Queue{"CurrentID"}} = ""
+            SpeechScript::SpeakNextMessage
+        }
+    }
+
+    # Creating notify-osd bubble notifications if enabled and Python is available
+    if (%SpeechScript_Settings{"Notification Bubbles"} == "on" && $Python.IsAvailable == True)
+    {
+        # Ensuring interpreter and pynotify are initialised
+        if (%SpeechScript_Settings{"PythonInitialised"} == "")
+        {
+        
+python.begin("Omega Developments.Speech Script")
+import pynotify
+
+# Initialising pynotify
+pynotify.init('No idea why this is needed')
+python.end
+
+            # Recording initialisation
+            %SpeechScript_Settings{"PythonInitialised"} = 1
+        }
+
+python.begin("Omega Developments.Speech Script")
+
+# Obtaining message data
+body = kvirc.getLocal('rawmessage')
+title = kvirc.getLocal('nick') + ' (' + kvirc.getLocal('channel') + ', ' + kvirc.getLocal('network') + ')'
+
+# Initialising notification bubble, updating inplace if it already exists
+try:
+    notification.update(title,'\n' + body)
+except NameError:
+    notification = pynotify.Notification(title,'\n' + body)
+
+# Showing the notification bubble
+notification.show()
+python.end
+    }
+}
+
+# SpeechScript::Startup alias
+alias(SpeechScript::Startup)
+{
+    # Making sure settings directory exists
+    if ($file.exists($file.localdir("/scripts/")) == $false) file.mkdir $file.localdir("/scripts/")
+    
+    # Loading settings if the config file exists
+    if ($file.exists($file.localdir("/scripts/speech_script_settings")) == $true)
+    {
+        # Opening config file
+        %configFileID = $config.open($file.localdir("/scripts/speech_script_settings"))
+        
+        # Loading settings
+        %SpeechScript_Settings = $unserialize($config.read(%configFileID, "SpeechScript_Settings"))
+        
+        # Loading channel settings
+        config.setsection %configFileID "ChannelSettings"
+        %SpeechScript_ChannelSettings = $unserialize($config.read(%configFileID, "SpeechScript_ChannelSettings"))
+        
+        # Closing configuration file
+        config.close %configFileID
+    }
+
+    # Initialising settings if needed
+    if (%SpeechScript_Settings{"Status"} == "") %SpeechScript_Settings{"Status"} = "on"
+    if (%SpeechScript_Settings{"Volume"} == "") %SpeechScript_Settings{"Volume"} = 100
+    if (%SpeechScript_Settings{"Notification Bubbles"} == "") %SpeechScript_Settings{"Notification Bubbles"} = "off"
+    
+    # Initialising speech queue data
+    %SpeechScript_Queue{"NextAvailableID"} = 1
+    %SpeechScript_Queue{"CurrentID"} = 0
+
+    # Speech command dialog
+    %dialog = $new(dialog,,"SpeechScript_SpeechCommand")
+    %dialog->$setWindowTitle("Configure Speech Command - Speech Script")
+
+    %vbox = $new(vbox,%dialog,"VBox")
+    %layout = $new(layout,%dialog)
+    %layout->$addRowSpacing(0,30)
+    %layout->$addWidget(%vbox,0,0)
+    
+    %label_command = $new(label,%vbox)
+    %label_command->$setText("Please enter the command to use when this script should generate speech from a channel message:\n")
+    
+    %lineedit_command = $new(lineedit,%vbox,"Command")
+    %dialog->%lineedit_command = %lineedit_command
+
+    # Help labels split up based on alignment. Note that 'WordBreak' is in reality justify
+    %label_help1 = $new(label,%vbox,"Help 1")
+    %label_help1->$setText("\nThe command should be a full invocation including the substitutions variable below representing the message (some are optional). Speechmark-delimit the program path (if it contains spaces) and strongly-quote \%m (single quotes) - the command is ran through a shell, so if you don't do this right you run the risk of executing whatever the user says.")
+    %label_help1->$setAlignment("WordBreak")
+
+    %label_help2 = $new(label,%vbox,"Help 2")
+    %label_help2->$setText("\nMessage: \%m\nVolume (optional): \%v\n\nExample espeak invocation using a mainly-understandable female voice - select and copy the text if needed:\n\nespeak -v en+f3 -s 160 -a \%v '\%m'\n")
+
+    %hbox = $new(hbox,%dialog)
+    %layout->$addWidget(%hbox,1,0)
+
+    %button_OK = $new(button, %hbox)
+    %button_OK->$setText("OK")
+
+    %button_Cancel = $new(button, %hbox)
+    %button_Cancel->$setText("Cancel")
+
+    # Event overrides
+    privateimpl(%dialog,"showevent")
+    {
+        # Populating lineedit_command 
+        $$->%lineedit_command->$setText(%SpeechScript_Settings{"SpeechCommand"})
+        $$->%lineedit_command->$setFocus
+    }
+
+    privateimpl(%dialog,"OK")
+    {
+        # Making sure the message substitution is present
+        if ($(!($str.contains($$->%lineedit_command->$text, "\%m"))))
+        {
+            dialog.message("Configure Speech Command - Speech Script", "Please ensure the speech command contains the '\%m' message substitution.", "Warning", "OK") {}
+            return
+        }
+
+        # Saving configuration
+        %SpeechScript_Settings{"SpeechCommand"} = $$->%lineedit_command->$text
+        SpeechScript::Save
+
+        $$->$hide
+    }
+
+    privateimpl(%dialog,"Cancel")
+    {
+        $$->$hide
+    }
+    
+    objects.connect %button_OK clicked %dialog OK
+    objects.connect %button_Cancel clicked %dialog Cancel
+
+    # Saving dialog object ID
+    %SpeechScript_Settings{"GUI"}{"SpeechScript_SpeechCommand"} = %dialog
+
+    # Integrating into main toolbar
+    # Creating script popup
+    if ($popup.exists("SpeechScript_Main")) popup.destroy "SpeechScript_Main"
+    popup.create "SpeechScript_Main"
+    popup.addItem("SpeechScript_Main", "Turn script on",,, \%SpeechScript_Settings{\"Status\"} == \"off\") SpeechScript "on"
+    popup.addItem("SpeechScript_Main", "Turn script off",,, \%SpeechScript_Settings{\"Status\"} == \"on\") SpeechScript "off"
+    popup.addSeparator "SpeechScript_Main"
+    popup.addPrologue ("SpeechScript_Main") 
+    {
+        # TODO (if I ever release Status Script then this will matter):
+        # This doesn't appear to add the IgnoreStatuses extPopup during the first SpeechScript_Main popupshow, but appears thereafter. Talk to CtrlAltCa to see why
+        
+        # Determining current volume
+        %:currentVolume = $SpeechScript::GetCurrentVolumeString
+        
+        # Debug code
+        #echo "Generating IgnoreStatuses..."
+        
+        # Removing old IgnoreStatuses popup
+        popup.delitem -q "SpeechScript_Main" "IgnoreStatuses"
+        if ($popup.exists("SpeechScript_Main_IgnoreStatuses")) popup.destroy "SpeechScript_Main_IgnoreStatuses"
+        
+        # Recreating with all current ignore statuses
+        popup.create "SpeechScript_Main_IgnoreStatuses"
+        
+        # Popup items assigned %status IDs so the correct command can be ascertained at the code's call time
+        foreach(%status, $keys(%SpeechScript_Settings{"IgnoreDuringCertainStatuses"})) popup.addItem("SpeechScript_Main_IgnoreStatuses", %status,,%status) SpeechScript removeignoredstatus $popup.currentItemID
+        popup.addSeparator "SpeechScript_Main_IgnoreStatuses"
+        popup.addItem("SpeechScript_Main_IgnoreStatuses", "Add an ignored status...") SpeechScript addignoredstatusprompt
+        
+        # Adding new popup to main menu
+        popup.addExtPopup "SpeechScript_Main" "SpeechScript_Main_IgnoreStatuses" "Statuses to ignore messages during..." "" "IgnoreStatuses"
+        
+        # Debug code
+        #echo "Generating IgnoreStatuses completed."
+    }
+    popup.addItem("SpeechScript_Main", "Clear queued messages") SpeechScript clearqueuedmessages
+    
+    popup.addSubPopup "SpeechScript_Main" "Change volume (currently "\%:currentVolume")" "" "Volume"
+    popup.addItem("SpeechScript_Main.Volume", "Mute",$icon("accept"),, \%:currentVolume == \"Mute\") SpeechScript::SetVolume "Mute"
+    popup.addItem("SpeechScript_Main.Volume", "Mute",,, \%:currentVolume != \"Mute\") SpeechScript::SetVolume "Mute"
+    popup.addItem("SpeechScript_Main.Volume", "Quiet",$icon("accept"),, \%:currentVolume == \"Quiet\") SpeechScript::SetVolume "Quiet"
+    popup.addItem("SpeechScript_Main.Volume", "Quiet",,, \%:currentVolume != \"Quiet\") SpeechScript::SetVolume "Quiet"
+    popup.addItem("SpeechScript_Main.Volume", "Normal",$icon("accept"),, \%:currentVolume == \"Normal\") SpeechScript::SetVolume "Normal"
+    popup.addItem("SpeechScript_Main.Volume", "Normal",,, \%:currentVolume != \"Normal\") SpeechScript::SetVolume "Normal"
+    popup.addItem("SpeechScript_Main.Volume", "Loud",$icon("accept"),, \%:currentVolume == \"Loud\") SpeechScript::SetVolume "Loud"
+    popup.addItem("SpeechScript_Main.Volume", "Loud",,, \%:currentVolume != \"Loud\") SpeechScript::SetVolume "Loud"
+    popup.addItem("SpeechScript_Main.Volume", "MAXIMUM",$icon("accept"),, \%:currentVolume == \"MAXIMUM\") SpeechScript::SetVolume "MAXIMUM"
+    popup.addItem("SpeechScript_Main.Volume", "MAXIMUM",,, \%:currentVolume != \"MAXIMUM\") SpeechScript::SetVolume "MAXIMUM"
+    popup.addSeparator "SpeechScript_Main"
+
+    # Ignore messages when relevant channel is active setting
+    popup.addItem("SpeechScript_Main", "Ignore messages when KVIrc and the relevant channel window is in focus",,, \%SpeechScript_Settings{\"IgnoreWhenActive\"} == \"\")
+    {
+        # Messages are currently not ignored when the channel window etc is active - updating and saving
+        %SpeechScript_Settings{"IgnoreWhenActive"} = "IgnoreWhenActive"
+        SpeechScript::Save
+        
+        echo "Speech Script: Messages will not be spoken when KVIrc and the relevant channel window is in focus."
+    }
+    popup.addItem("SpeechScript_Main", "Ignore messages when KVIrc and the relevant channel window is in focus",$icon("accept"),, \%SpeechScript_Settings{\"IgnoreWhenActive\"} != \"\")
+    {
+        # Messages are currently ignored when the channel window etc is active - updating and saving
+        %SpeechScript_Settings{"IgnoreWhenActive"} = ""
+        SpeechScript::Save
+        
+        echo "Speech Script: Messages will now be spoken at all times (including when KVIrc and the relevant channel window is in focus)."
+    }
+    
+    # Display messages in notification bubbles setting
+    popup.addItem("SpeechScript_Main", "Display messages in notification bubbles",,, \%SpeechScript_Settings{\"Notification Bubbles\"} != \"on\")
+    {
+        # Notification bubbles are currently not used to display messages - updating and saving
+        %SpeechScript_Settings{"Notification Bubbles"} = "on"
+        SpeechScript::Save
+        
+        echo "Speech Script: Messages will now be displayed in notification bubbles when they are spoken."
+    }
+    popup.addItem("SpeechScript_Main", "Display messages in notification bubbles",$icon("accept"),, \%SpeechScript_Settings{\"Notification Bubbles\"} == \"on\")
+    {
+        # Messages are currently ignored when the channel window etc is active - updating and saving
+        %SpeechScript_Settings{"Notification Bubbles"} = ""
+        SpeechScript::Save
+
+        # Destroying python interpreter if it is in use
+        if (%SpeechScript_Settings{"PythonInitialised"} != "")
+        {
+            python.destroy "Omega Developments.Speech Script"
+            %SpeechScript_Settings{"PythonInitialised"} = ""
+        }
+        
+        echo "Speech Script: Messages will no longer be displayed in notification bubbles when they are spoken."
+    }
+    popup.addItem("SpeechScript_Main", "Configure speech command...") %SpeechScript_Settings{"GUI"}{"SpeechScript_SpeechCommand"}->$show
+    popup.delitem -q "Scripts" "SpeechScript_Main"
+    popup.addExtPopup "Scripts" "SpeechScript_Main" "Speech Script" "" "SpeechScript_Main"
+    
+    # Tying main script popup to KVIrc menu (appears after 'Scripting')
+    setmenu -i=2 "Scripts" "Scripts"
+    
+    # Integrating into channel popup
+    # Creating script popup
+    if ($popup.exists("SpeechScript_Channel")) popup.destroy "SpeechScript_Channel"
+    popup.create "SpeechScript_Channel"
+    
+    # Monitor channel setting
+    popup.additem("SpeechScript_Channel", "Monitor "\$target,,, \%SpeechScript_ChannelSettings{\$target} == \"\")
+    {
+        # Channel is not monitored - adding monitoring and saving. Adding 'include channel with message' and 'ignore during certain statuses' settings as default
+        %SpeechScript_ChannelSettings{$target} = $target
+        %SpeechScript_ChannelSettings{$target".IncludeChannelWithMessage"} = $target".IncludeChannelWithMessage"
+        %SpeechScript_ChannelSettings{$target".IgnoreDuringCertainStatuses"} = $target".IgnoreDuringCertainStatuses"
+        SpeechScript::Save
+        
+        echo "Channel is now monitored by Speech Script."
+    }
+    popup.additem("SpeechScript_Channel", "Monitor "\$target,$icon("accept"),, \%SpeechScript_ChannelSettings{\$target} != \"\")
+    {
+        # Channel is monitored - removing all channel settings and saving
+        %nickIgnoreRecords = $str.grep($target"(\..*){0,1}", $keys(%SpeechScript_ChannelSettings), "r")
+        foreach(%setting, %nickIgnoreRecords) %SpeechScript_ChannelSettings{%setting} = ""
+        SpeechScript::Save
+        
+        echo "Channel is no longer monitored by Speech Script."
+    }
+    popup.addseparator "SpeechScript_Channel"
+
+    # Ignore nicks below hop setting
+    popup.additem("SpeechScript_Channel", "Ignore nicks below hop",,, \%SpeechScript_ChannelSettings{\$target\".IgnoreEveryoneBelowHop\"} == \"\")
+    {
+        # Nicks below hop aren't ignored - setting this
+        %SpeechScript_ChannelSettings{$target".IgnoreEveryoneBelowHop"} = $target".IgnoreEveryoneBelowHop"
+        SpeechScript::Save
+        
+        echo "Speech Script: Nicks below hop are now ignored."
+    }
+    popup.additem("SpeechScript_Channel", "Ignore nicks below hop",$icon("accept"),, \%SpeechScript_ChannelSettings{\$target\".IgnoreEveryoneBelowHop\"} != \"\")
+    {
+        # Nicks below hop are ignored - removing this
+        %SpeechScript_ChannelSettings{$target".IgnoreEveryoneBelowHop"} = ""
+        SpeechScript::Save
+        
+        echo "Speech Script: Nicks below hop are no longer ignored."
+    }
+
+    # Include channel with message setting
+    popup.additem("SpeechScript_Channel", "Channel included with message",,, \%SpeechScript_ChannelSettings{\$target\".IncludeChannelWithMessage\"} == \"\")
+    {
+        # Channel is not included with messages - setting this
+        %SpeechScript_ChannelSettings{$target".IncludeChannelWithMessage"} = $target".IncludeChannelWithMessage"
+        SpeechScript::Save
+        
+        echo "Speech Script: The channel is now included with messages originating from "$target"."
+    }
+    popup.additem("SpeechScript_Channel", "Channel included with message",$icon("accept"),, \%SpeechScript_ChannelSettings{\$target\".IncludeChannelWithMessage\"} != \"\")
+    {
+        # Channel currently included with each message - removing this
+        %SpeechScript_ChannelSettings{$target".IncludeChannelWithMessage"} = ""
+        SpeechScript::Save
+        
+        echo "Speech Script: The channel is no longer included with messages originating from "$target"."
+    }
+
+    # Include network with message setting
+    popup.additem("SpeechScript_Channel", "Network included with message",,, \%SpeechScript_ChannelSettings{\$target\".IncludeNetworkWithMessage\"} == \"\")
+    {
+        # Network is not included with messages - setting this
+        %SpeechScript_ChannelSettings{$target".IncludeNetworkWithMessage"} = $target".IncludeNetworkWithMessage"
+        SpeechScript::Save
+        
+        echo "Speech Script: The network is now included with messages originating from "$target"."
+    }
+    popup.additem("SpeechScript_Channel", "Network included with message",$icon("accept"),, \%SpeechScript_ChannelSettings{\$target\".IncludeNetworkWithMessage\"} != \"\")
+    {
+        # Network currently included with each message - removing this
+        %SpeechScript_ChannelSettings{$target".IncludeNetworkWithMessage"} = ""
+        SpeechScript::Save
+        
+        echo "Speech Script: The network is no longer included with messages originating from "$target"."
+    }
+
+    # Ignore during particular statuses setting
+    popup.additem("SpeechScript_Channel", "Ignore messages during particular statuses",,, \%SpeechScript_ChannelSettings{\$target\".IgnoreDuringCertainStatuses\"} == \"\")
+    {
+        # Messages are not ignored during particular statuses - setting this
+        %SpeechScript_ChannelSettings{$target".IgnoreDuringCertainStatuses"} = $target".IgnoreDuringCertainStatuses"
+        SpeechScript::Save
+        
+        echo "Speech Script: Messages in "$target" will now be ignored during particular statuses."
+    }
+    popup.additem("SpeechScript_Channel", "Ignore messages during particular statuses",$icon("accept"),, \%SpeechScript_ChannelSettings{\$target\".IgnoreDuringCertainStatuses\"} != \"\")
+    {
+        # Messages are ignored during particular statuses - removing this
+        %SpeechScript_ChannelSettings{$target".IgnoreDuringCertainStatuses"} = ""
+        SpeechScript::Save
+        
+        echo "Speech Script: Messages in "$target" will no longer be ignored during particular statuses."
+    }
+    popup.addseparator "SpeechScript_Channel"
+    
+    # If ZNC buffer playback has been detected for this channel, indicate and allow user to remove the block
+    popup.additem("SpeechScript_Channel", "ZNC buffer playback in progress - click here to disable block",,, \%SpeechScript_ChannelSettings{\$target\".ZNCPlayback\"} != \"\")
+    {
+        # ZNC buffer playback has been detected for this channel and the user wants to remove the block - deleting the record from the hashtable and saving
+        %SpeechScript_ChannelSettings{$target".ZNCPlayback"} = ""
+        SpeechScript::Save
+        
+        echo "Speech Script: The ZNC buffer playback block for "$target" has been removed."
+    }
+    
+    # Allowing ignored nicks to be echoed
+    popup.additem("SpeechScript_Channel", "Echo ignored nicks in "\$target)
+    {
+        echo "Speech Script: Nicks ignored in "$target":"
+        
+        # Looping through all channel ignored nicks
+        %ignoredNickRecords = $str.grep($target".Ignore.*", $keys(%SpeechScript_ChannelSettings), "w")
+        foreach(%ignoredNickRecord, %ignoredNickRecords)
+        {
+            # Determining ignoredNick (element name and data will be identical)
+            %ignoredNick = $str.split(".",%ignoredNickRecord)[2]
+            
+            echo %ignoredNick
+        }
+
+        echo "End of nicks ignored in "$target"."
+    }
+    
+    # Allowing user to specify a nick to ignore
+    popup.additem("SpeechScript_Channel", "Ignore nick in "\$target"...")
+    {
+        # Obtaining nick to ignore
+        dialog.textinput -i=$icon("Information") ("Ignore Nick In "$target, "Please enter the nick to ignore in "$target, "Add", "escape=Cancel")
+        {
+            # Debug code
+            #echo "Dialog return value: "$0
+
+            # Exiting if user cancelled
+            if ($0 == 1) return
+            
+            # Setting nick
+            %nick = $1
+            
+            # Making sure nick was specified
+            if (%nick == "")
+            {
+                # It wasn't - warning user and exiting
+                warning "Please specify a nick to ignore on "$target"."
+                return
+            }
+
+            # Making sure nick isn't already ignored
+            if (%SpeechScript_ChannelSettings{$target".Ignore."%nick} != "")
+            {
+                # Nick is already ignored - warning user and exiting
+                warning %nick" is already ignored in "$target"."
+                return
+            }
+
+            # Adding nick to ignore and saving
+            %SpeechScript_ChannelSettings{$target".Ignore."%nick} = $target".Ignore."%nick
+            SpeechScript::Save
+            
+            echo "Speech Script: %nick is now ignored in $target."
+        }
+    }
+    
+    # Allowing user to specify a nick to unignore
+    popup.additem("SpeechScript_Channel", "Unignore nick in "\$target"...")
+    {
+        # Obtaining nick to unignore
+        dialog.textinput -i=$icon("Information") ("Unignore Nick In "$target, "Please enter the nick to unignore in "$target, "Add", "escape=Cancel")
+        {
+            # Debug code
+            #echo "Dialog return value: "$0
+
+            # Exiting if user cancelled
+            if ($0 == 1) return
+            
+            # Setting nick
+            %nick = $1
+            
+            # Making sure nick was specified
+            if (%nick == "")
+            {
+                # It wasn't - warning user and exiting
+                warning "Please specify a nick to unignore on "$target"."
+                return
+            }
+
+            # Making sure nick is currently ignored
+            if (%SpeechScript_ChannelSettings{$target".Ignore."%nick} == "")
+            {
+                # Nick is not currently ignored - warning user and exiting
+                warning %nick" is already ignored in "$target"."
+                return
+            }
+
+            # Unignoring nick and saving
+            %SpeechScript_ChannelSettings{$target".Ignore."%nick} = ""
+            SpeechScript::Save
+            
+            # Informative message
+            echo "Speech Script: %nick is no longer ignored in $target."
+        }
+    }
+    
+    # Adding Speech Script menu to channel popup (ensuring that it doesn't exist already)
+    popup.delitem -q "channeltextview" "SpeechScript_Channel"
+    popup.addSeparator "channeltextview" "SpeechScript_Channel_Separator" "\%SpeechScript_Settings{\"Status\"} == \"on\""
+    popup.addExtPopup "channeltextview" "SpeechScript_Channel" "Speech Script" "" "SpeechScript_Channel" "\%SpeechScript_Settings{\"Status\"} == \"on\""
+
+    # Integrating into nicklist popup
+    # Creating script popup
+    if ($popup.exists("SpeechScript_Nicklist")) popup.destroy "SpeechScript_Nicklist"
+    popup.create "SpeechScript_Nicklist"
+    
+    # Ignore/unignore user option
+    popup.additem("SpeechScript_Nicklist", "Ignore "\$0" in "\$target,,, \%SpeechScript_ChannelSettings{\$target\".Ignore.\"\$0} == \"\")
+    {
+        # Adding nick to ignore and saving
+        %SpeechScript_ChannelSettings{$target".Ignore."$0} = $target".Ignore."$0
+        SpeechScript::Save
+        
+        echo "Speech Script: "$0" is now ignored in "$target"."
+    }
+    popup.additem("SpeechScript_Nicklist", "Ignore "\$0" in "\$target,$icon("accept"),, \%SpeechScript_ChannelSettings{\$target\".Ignore.\"\$0} != \"\")
+    {
+        # Unignoring nick and saving
+        %SpeechScript_ChannelSettings{$target".Ignore."$0} = ""
+        SpeechScript::Save
+        
+        echo "Speech Script: "$0" is now unignored in "$target"."
+    }
+        
+    # Adding Speech Script menu to nicklist popup (ensuring that it doesn't exist already)
+    popup.delitem -q "channel" "SpeechScript_Nicklist"
+    popup.addSeparator "channel" "SpeechScript_Nicklist_Separator" %SpeechScript_Settings{"Status"} == "on"
+    popup.addExtPopup "channel" "SpeechScript_Nicklist" "Speech Script" "" "SpeechScript_Nicklist" %SpeechScript_Settings{"Status"} == "on"
+}
+
+# Uninstaller alias
+alias(SpeechScript::uninstall::uninstall)
+{
+    # All events and aliases should be uninstalled here
+    alias(SpeechScript) {}
+    alias(SpeechScript::GetCurrentVolumeString) {}
+    alias(SpeechScript::MessageProcessor) {}
+    alias(SpeechScript::Save) {}
+    alias(SpeechScript::SetVolume) {}
+    alias(SpeechScript::SpeakNextMessage) {}
+    alias(SpeechScript::Startup) {}
+    alias(SpeechScript::uninstall::uninstall) {}
+    event(OnAction,SpeechScript) {}
+    event(OnKVIrcStartup,SpeechScript) {}
+    event(OnChannelMessage,SpeechScript) {}
+    
+    # Removing popups
+    popup.delitem -q "Scripts" "SpeechScript_Main"
+    popup.delitem -q "channeltextview" "SpeechScript_Channel"
+    popup.delitem -q "channeltextview" "SpeechScript_Channel_Separator"
+    popup.delitem -q "channel" "SpeechScript_Nicklist"
+    popup.delitem -q "channel" "SpeechScript_Nicklist_Separator"
+    popup.destroy -q "SpeechScript_Main"
+    popup.destroy -q "SpeechScript_Main_IgnoreStatuses"
+    popup.destroy -q "SpeechScript_Channel"
+    popup.destroy -q "SpeechScript_Nicklist"
+
+    # Destroying objects
+    foreach(%object,$keys(%SpeechScript_Settings{"GUI"}))
+    {
+        destroy %SpeechScript_Settings{"GUI"}{%object}
+    }
+    
+    # Removing Python interpreter if appropriate
+    if (%SpeechScript_Settings{"PythonInitialised"} != "") python.destroy "Omega Developments.Speech Script"
+    
+    # Clearing global variables
+    %SpeechScript_Settings = ""
+    %SpeechScript_Queue = ""
+    %SpeechScript_ChannelSettings = ""
+}
+
+
+# COMMENTS
+
+# %SpeechScript_Settings format:
+
+# Item: {Status}. Data: Script status - 'On'/'Off'.
+# Item: {Volume}. Data: The volume number to use when commanding ossplay to play the wav. If this is 0, nothing is spoken (the script is muted).
+# Item: {IgnoreWhenActive}. Indicates that KVIrc must not be active or if it is, the relevant channel must not be active for a message to be spoken.
+# Item: {SpeechCommand}. Data: The command to run through a shell with message substituted in when text is to be spoken.
+# Item: {PythonInitialised}. Presence indicates that the python interpreter and pynofiy have been initialised.
+
+# %SpeechScript_ChannelSettings format:
+
+# Item: {<channel name>}. Presence of a channel name as an item in the hash indicates that the channel is to be monitored.
+# Item: {IgnoreDuringCertainStatuses}. A hash of statuses that the script should ignore speech during, if the relevant channel has been appropriately configured.
+# Item: {<channel name>.Ignore.<nick>}. Indicates that the nick is to be ignored on the particular channel.
+# Item: {<channel name>.IgnoreEveryoneBelowHop}. Indicates that everyone below hop should be ignored on this channel.
+# Item: {<channel name>.IncludeNetworkWithMessage}. Indicates that when a message is spoken, the network of the originating channel is included.
+# Item: {<channel name>.IncludeChannelWithMessage}. Indicates that when a message is spoken, the originating channel is included.
+# Item: {<channel name>.IgnoreDuringCertainStatuses}. Indicates that channel speech is to be ignored when statuses recorded in IgnoreDuringCertainStatuses are in progress.
+# Item: {<channel name>.ZNCPlayback}. Indicates that text posted to the channel is very likely to be from ZNC (unfortunately normal messages will also be caught), and therefore should be ignored.
+
+# %SpeechScript_Queue format:
+
+# Item: {NextAvailableID}. Data: ID to use to store the next text to speak.
+# Item: {CurrentID}. Data: The ID of the currently-speaking or last spoken text.
+# Item: {<ID>}. Data: A hash of data associated with the text to speak:
+# Item: {<ID>}{TextToSpeak}. Data: Actual text to speak through voice synthesiser.
+# Item: {<ID>}{Network}. Data: Network.
+# Item: {<ID>}{Channel}. Data: Channel.
+# Item: {<ID>}{Nick}. Data: Nick.
+# Item: {<ID>}{Message}. Data: Text to diaply in notification bubbles if this is enabled.
+
+
+# Speech synthesis R&D
+
+# Festival: Can change its voice to normal English, but even then the output is very garbled. Complicated LISP-based interface, cant seem to get it to set a different voice than default on the commnandline interface. The 'text2wave' script is actually workable however - 'echo "Test" | text2wave -eval "(voice_rab_diphone)" -o test.wav'. The playback quality doesnt improve when its played through ossplay however, so outputting to wav is overkill.
+# No other programs appear even to be up to espeak's standard - see http://www.linux-sound.org/speech.html for a list
