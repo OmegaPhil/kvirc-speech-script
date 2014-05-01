@@ -667,6 +667,7 @@ alias(SpeechScript::Startup)
     if (%SpeechScript_Settings{"Status"} == "") %SpeechScript_Settings{"Status"} = "on"
     if (%SpeechScript_Settings{"Volume"} == "") %SpeechScript_Settings{"Volume"} = 100
     if (%SpeechScript_Settings{"Notification Bubbles"} == "") %SpeechScript_Settings{"Notification Bubbles"} = "off"
+    %SpeechScript_Settings{"PythonInitialised"} = ""
     
     # Initialising speech queue data
     %SpeechScript_Queue{"NextAvailableID"} = 1
