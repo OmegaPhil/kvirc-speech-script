@@ -1,10 +1,12 @@
 Speech Script allows you via a called speech synthesis command to listen to what people are saying on channels - similar to the old mIRC Agent functionality on Windows.
 
-Last updated on 5.04.14 for v1.6.
+Last updated on 4.11.14 for v1.7.
 
 
 Installation
 ============
+
+v1.7+ requires KVIrc 4.3.1 r6393 or higher due to a KVIrc Script change - for all I know I'm the only user of this script, if you have an earlier version of KVIrc and want to use this script, please open an issue on Github (see 'Bugs And Feature Requests' later) and I will try to work something out.
 
 To load the script into KVIrc (which then persists until you uninstall) and run its startup alias, in a KVIrc console window:
 
@@ -148,4 +150,4 @@ Please create an issue on the [Github issue tracker](https://github.com/OmegaPhi
 Contact Details
 ===============
 
-OmegaPhil+KVIrc.Script@gmail.com
+OmegaPhil@startmail.com

@@ -1,10 +1,10 @@
 # Speech Script
 # =============
 
-# Version 1.6 April 2014
+# Version 1.7 November 2014
 
 /*
-Copyright (C) 2010-2014 OmegaPhil (OmegaPhil+KVIrc@gmail.com)
+Copyright (C) 2010-2014 OmegaPhil (OmegaPhil@startmail.com)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -688,10 +688,10 @@ alias(SpeechScript::Startup)
     %lineedit_command = $new(lineedit,%vbox,"Command")
     %dialog->%lineedit_command = %lineedit_command
 
-    # Help labels split up based on alignment. Note that 'WordBreak' is in reality justify
+    # Help labels split up based on alignment
     %label_help1 = $new(label,%vbox,"Help 1")
     %label_help1->$setText("\nThe command should be a full invocation including the substitutions variable below representing the message (some are optional). Speechmark-delimit the program path (if it contains spaces) and strongly-quote \%m (single quotes) - the command is ran through a shell, so if you don't do this right you run the risk of executing whatever the user says.")
-    %label_help1->$setAlignment("WordBreak")
+    %label_help1->$setAlignment("Justify")
 
     %label_help2 = $new(label,%vbox,"Help 2")
     %label_help2->$setText("\nMessage: \%m\nVolume (optional): \%v\n\nExample espeak invocation using a mainly-understandable female voice - select and copy the text if needed:\n\nespeak -v en+f3 -s 160 -a \%v '\%m'\n")
