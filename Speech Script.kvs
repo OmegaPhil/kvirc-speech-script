@@ -13,11 +13,11 @@ the Free Software Foundation, either version 3 of the License, or
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.                See the
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with this program.                If not, see <http://www.gnu.org/licenses/>.
+along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 
 
@@ -604,39 +604,13 @@ alias(SpeechScript::SpeakNextMessage)
         }
     }
 
-    # Creating notify-osd bubble notifications if enabled and Python is available
-    if (%SpeechScript_Settings{"Notification Bubbles"} == "on" && $Python.IsAvailable == True)
+    # Creating notify-osd bubble notifications if enabled
+    # With version 1.7 and below, Python used to be used to allow reuse of a notification bubble for any/all channel conversation - in 2016/2017 this started causing KVIrc to lockup, and the notify-bin binary that should do this job is unmaintained, so this functionality has been dropped - see https://github.com/OmegaPhil/kvirc-speech-script/issues/2
+    if (%SpeechScript_Settings{"Notification Bubbles"} == "on")
     {
-        # Ensuring interpreter and pynotify are initialised
-        if (%SpeechScript_Settings{"PythonInitialised"} == "")
-        {
-        
-python.begin("Omega Developments.Speech Script")
-import pynotify
-
-# Initialising pynotify
-pynotify.init('No idea why this is needed')
-python.end
-
-            # Recording initialisation
-            %SpeechScript_Settings{"PythonInitialised"} = 1
-        }
-
-python.begin("Omega Developments.Speech Script")
-
-# Obtaining message data
-body = kvirc.getLocal('rawmessage')
-title = kvirc.getLocal('nick') + ' (' + kvirc.getLocal('channel') + ', ' + kvirc.getLocal('network') + ')'
-
-# Initialising notification bubble, updating inplace if it already exists
-try:
-    notification.update(title,'\n' + body)
-except NameError:
-    notification = pynotify.Notification(title,'\n' + body)
-
-# Showing the notification bubble
-notification.show()
-python.end
+        # Run is used here to prevent command injection - does not run through a shell
+        %title = "%nick (%channel, %network)"
+        run "/usr/bin/notify-send" %title %message
     }
 }
 
@@ -667,7 +641,6 @@ alias(SpeechScript::Startup)
     if (%SpeechScript_Settings{"Status"} == "") %SpeechScript_Settings{"Status"} = "on"
     if (%SpeechScript_Settings{"Volume"} == "") %SpeechScript_Settings{"Volume"} = 100
     if (%SpeechScript_Settings{"Notification Bubbles"} == "") %SpeechScript_Settings{"Notification Bubbles"} = "off"
-    %SpeechScript_Settings{"PythonInitialised"} = ""
     
     # Initialising speech queue data
     %SpeechScript_Queue{"NextAvailableID"} = 1
@@ -824,13 +797,6 @@ alias(SpeechScript::Startup)
         %SpeechScript_Settings{"Notification Bubbles"} = ""
         SpeechScript::Save
 
-        # Destroying python interpreter if it is in use
-        if (%SpeechScript_Settings{"PythonInitialised"} != "")
-        {
-            python.destroy "Omega Developments.Speech Script"
-            %SpeechScript_Settings{"PythonInitialised"} = ""
-        }
-        
         echo "Speech Script: Messages will no longer be displayed in notification bubbles when they are spoken."
     }
     popup.addItem("SpeechScript_Main", "Configure speech command...") %SpeechScript_Settings{"GUI"}{"SpeechScript_SpeechCommand"}->$show
@@ -1118,9 +1084,6 @@ alias(SpeechScript::uninstall::uninstall)
     {
         destroy %SpeechScript_Settings{"GUI"}{%object}
     }
-    
-    # Removing Python interpreter if appropriate
-    if (%SpeechScript_Settings{"PythonInitialised"} != "") python.destroy "Omega Developments.Speech Script"
     
     # Clearing global variables
     %SpeechScript_Settings = ""
