@@ -1,6 +1,6 @@
 Speech Script allows you via a called speech synthesis command to listen to what people are saying on channels - similar to the old mIRC Agent functionality on Windows.
 
-Last updated on 4.11.14 for v1.7.
+Last updated on 26.02.17 for v1.8.
 
 
 Installation
@@ -21,7 +21,7 @@ Dependencies
 
 This script depends on a speech engine of your choice with a commmandline interface - see configuration later for how to set the command to run when speech is needed. Currently I use [espeak](http://espeak.sourceforge.net/).
 
-If notification bubbles are enabled (notices displayed by the notification daemon when people speak), Python 2.6 or later (not Python 3) and the python-notify package are required (pynotify is imported).
+If notification bubbles are enabled, the notify-bin program must be available (there is no longer a dependency on Python).
 
 
 Uninstallation
@@ -45,7 +45,7 @@ Change volume: Currently this has only been implemented for espeak - tell the sp
 
 Ignore messages when KVIrc and the relevant channel window is in focus: If you are using the channel generating the speech, you probably don't want it blaring out of the speakers too - however you may leave KVIrc in focus to do something else other than computering, and still want the speech - so this is configurable.
 
-Display messages in notification bubbles: When a message comes in, along with being spoken it is sent to your notification daemon. This is dependent on KVIrc being compiled with Python support and a working Python installation, see Dependencies.
+Display messages in notification bubbles: When a message comes in, along with being spoken it is sent to your notification daemon. The notify-bin command must be available for this to work, see Dependencies.
 
 Statuses to ignore messages during: You can ignore this - the functionality works with the unreleased Status Script (I will release it if the current scripts have a warm enough reception, as it is a bit custom).
 

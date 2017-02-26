@@ -1,3 +1,8 @@
+v1.8 (26.02.17):
+Work around KVIrc locking up due to some sort of python/pynotify init screwup
+by dropping python and moving to notify-send, for chat notification bubbles -
+see https://github.com/OmegaPhil/kvirc-speech-script/issues/2
+
 v1.7 (4.11.14):
 Along with KVIrc 4.3.1 r6393, fix 'WordBreak' alignments to 'Justify'.
 
